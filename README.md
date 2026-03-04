@@ -1,6 +1,11 @@
 # Sentinel-Threat-Hunt-Ransomware-Investigation---want_to_cry.txt
 
 ## Overview
+Defender Alert ID:
+da2bdae3aa-7164-46ac-825d-52fcdd278972_1 & daa9f04e81-d68b-4275-a4c7-3cfb1e3d49d8_1
+
+Defender Incident:
+25780 & 25780
 
 During routine threat hunting within an internet-connected cyber-range environment, Microsoft Defender for Endpoint triggered a behavioral detection:
 
@@ -30,7 +35,7 @@ Whether the activity represented a real attack or a simulation
 
 Defender behavioral monitoring detected rapid deployment of ransom-note style files across many directories.
 
-## Detection Details
+Detection Details
 
 Field	Value
 Alert	Behavior:Win32/Ransomware!Note.G
@@ -43,7 +48,7 @@ This rule triggers when Defender observes:
 rapid ransom-note deployment
 across multiple directories
 within a short time window
-Investigation Timeline
+## Investigation Timeline
 
 The first step was identifying the exact time window of the activity.
 
@@ -88,7 +93,7 @@ recursive directory traversal
 
 commonly used in ransomware.
 
-Process Attribution Challenge
+## Process Attribution Challenge
 
 Defender attributed the file writes to:
 
@@ -103,7 +108,7 @@ MoveFile()
 
 In these cases the originating user process may not appear in telemetry.
 
-Identifying Non-Kernel Processes
+## Identifying Non-Kernel Processes
 
 To locate potential parent processes, a correlation search was performed.
 
@@ -119,7 +124,8 @@ Process	File Touches
 ntoskrnl.exe	253
 setup.exe	1
 gc_worker.exe	1
-Process Investigation
+
+## Process Investigation
 setup.exe
 
 Path:
@@ -177,7 +183,7 @@ it executed immediately after the event
 
 Without access to the endpoint filesystem, the contents of the script could not be verified.
 
-Ransom Note Artifact
+## Ransom Note Artifact
 
 All notes were named:
 
@@ -196,7 +202,8 @@ The humorous naming pattern suggests the possibility of:
 security testing
 cyber-range simulation
 proof-of-concept tooling
-Encryption Analysis
+
+## Encryption Analysis
 
 A critical step was determining whether file encryption occurred.
 
@@ -237,7 +244,8 @@ No signs of:
 payload downloads
 C2 communication
 data exfiltration
-Authentication Review
+
+## Authentication Review
 
 Logon activity during the investigation window was analyzed.
 
@@ -253,7 +261,8 @@ Specifically, no evidence of:
 RDP logons
 SMB lateral movement
 new account creation
-Key Findings
+
+## Key Findings
 
 Confirmed:
 
@@ -268,7 +277,8 @@ Command-and-control traffic
 Privilege escalation
 Lateral movement
 Persistence mechanisms
-Conclusion
+
+## Conclusion
 
 The investigation confirmed that ransom-note style files were deployed across the system, triggering Defender's ransomware behavioral detection.
 
@@ -286,17 +296,18 @@ proof-of-concept script
 
 Defender likely detected the behavior before encryption could begin, or the activity was intentionally generated within the cyber-range environment.
 
-MITRE ATT&CK Mapping
+## MITRE ATT&CK Mapping
 Technique	Description
 T1486	Data Encrypted for Impact (behavioral precursor)
 T1083	File and Directory Discovery
 T1106	Native API
 T1059.001	PowerShell
-Lessons Learned
+
+## Lessons Learned
 
 This investigation highlights several important threat hunting principles:
 
-Kernel Attribution Pitfall
+## Kernel Attribution Pitfall
 
 Defender may attribute file writes to:
 
@@ -304,11 +315,11 @@ ntoskrnl.exe
 
 when the originating process uses kernel filesystem APIs.
 
-Behavioral Detection Value
+## Behavioral Detection Value
 
 Defender detected the activity before encryption began, demonstrating the value of behavior-based detections.
 
-Importance of Context
+## Importance of Context
 
 In cyber-range environments, artifacts that resemble real attacks may originate from:
 
@@ -317,7 +328,7 @@ simulation tools
 security testing scripts
 Future Improvements
 
-Recommended follow-up actions:
+## Recommended follow-up actions:
 
 Retrieve and analyze cypher-toggle.ps1
 
@@ -327,7 +338,7 @@ Search environment for additional ransom-note artifacts
 
 Implement automated alerts for mass directory file creation
 
-Final Assessment
+## Final Assessment
 Impact: Low
 Encryption: Not observed
 Containment: Defender behavioral detection
