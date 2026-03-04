@@ -1,0 +1,1 @@
+# Sentinel-Threat-Hunt-Ransomware-Investigation---want_to_cry.txt-
