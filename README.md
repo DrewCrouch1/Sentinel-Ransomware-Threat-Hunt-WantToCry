@@ -1,350 +1,447 @@
-# Sentinel-Ransomware-Threat-Hunt--Want_To_Cry
+# Sentinel Ransomware Threat Hunt – Want_To_Cry
 
-Platform: Microsoft Sentinel + Microsoft Defender
-Environment: Azure VM Lab
-Focus: Ransomware Detection & Threat Hunting
+Platform: Microsoft Sentinel + Microsoft Defender  
+Environment: Azure VM Lab  
+Focus: Ransomware Detection & Threat Hunting  
 
-## Overview
-Defender Alert ID:
-da2bdae3aa-7164-46ac-825d-52fcdd278972_1 & daa9f04e81-d68b-4275-a4c7-3cfb1e3d49d8_1
+---
 
-Defender Incident:
-25780 & 25780
+# Executive Summary
 
-During routine threat hunting within an internet-connected cyber-range environment, Microsoft Defender for Endpoint triggered a behavioral detection:
+During routine threat hunting within an internet-connected cyber-range environment, Microsoft Defender for Endpoint generated a behavioral detection indicating potential ransomware activity.
 
+Detection:
+
+```
 Behavior:Win32/Ransomware!Note.G
+```
 
-The detection occurred on host:
+Host affected:
 
+```
 vm-final-lab-wo
+```
 
 Defender attributed the activity to:
 
+```
 ntoskrnl.exe (PID 4)
+```
 
-which indicates that the file writes were performed through kernel filesystem operations.
+This attribution indicates the file writes were executed through Windows kernel filesystem APIs.
 
-The goal of this investigation was to determine:
+The objective of this investigation was to determine:
 
-What process triggered the ransomware-style behavior
+- What process triggered the ransomware-style behavior
+- Whether file encryption occurred
+- Whether the system was actively compromised
+- Whether the activity represented a real attack or a simulation
 
-Whether file encryption occurred
+---
 
-Whether the system was actively compromised
+# Detection Details
 
-Whether the activity represented a real attack or a simulation
+| Field | Value |
+|------|------|
+| Alert | Behavior:Win32/Ransomware!Note.G |
+| Device | vm-final-lab-wo |
+| Process | ntoskrnl.exe |
+| Detection Type | Behavioral Monitoring |
 
-## Initial Detection
+Defender triggers this rule when it observes:
 
-Defender behavioral monitoring detected rapid deployment of ransom-note style files across many directories.
+- rapid ransom-note deployment  
+- across many directories  
+- within a short period of time  
 
-Detection Details
+---
 
-Field	Value
-Alert	Behavior:Win32/Ransomware!Note.G
-Device	vm-final-lab-wo
-Attributed Process	ntoskrnl.exe
-Detection Type	Behavioral Monitoring
-
-This rule triggers when Defender observes:
-
-rapid ransom-note deployment
-across multiple directories
-within a short time window
-## Investigation Timeline
+# Investigation Timeline
 
 The first step was identifying the exact time window of the activity.
 
-Query – Identify First and Last Ransom Note
+## Query – Identify First and Last Ransom Note
+
+```
 DeviceFileEvents
 | where FileName == "!want_to_cry.txt"
 | summarize FirstSeen=min(Timestamp), LastSeen=max(Timestamp), Count=count()
-Result
-First Seen	Last Seen	Count
-08:48:08	08:48:25	270
-Key Finding
-Ransom notes were deployed across the filesystem within 17 seconds
+```
 
-This indicates automated directory recursion.
+## Result
 
-## File System Activity
+| First Seen | Last Seen | Count |
+|-----------|-----------|------|
+| 08:48:08 | 08:48:25 | 270 |
+
+### Key Finding
+
+Ransom notes were deployed across the filesystem within **17 seconds**, indicating automated directory recursion.
+
+---
+
+# File System Activity
 
 Next, the overall file activity during the burst was analyzed.
 
-Query – File Operations
+## Query – File Operations
+
+```
 DeviceFileEvents
 | where Timestamp between (datetime(2026-03-02 08:47:30) .. datetime(2026-03-02 08:49:00))
 | summarize count() by ActionType
-Result
-Action	Count
-FileCreated	287
-FileModified	146
-FileRenamed	33
-FileDeleted	41
-Observation
+```
 
-The system performed:
+## Result
 
-287 file creations
-378 directories touched
+| Action | Count |
+|------|------|
+| FileCreated | 287 |
+| FileModified | 146 |
+| FileRenamed | 33 |
+| FileDeleted | 41 |
 
-within a 17-second window.
+### Observation
 
-This behavior strongly indicates:
+Within **17 seconds** the system performed:
 
+- 287 file creations  
+- 378 directories touched  
+
+This behavior strongly suggests:
+
+```
 recursive directory traversal
+```
 
-commonly used in ransomware.
+which is commonly used in ransomware.
 
-## Process Attribution Challenge
+---
+
+# Process Attribution Challenge
 
 Defender attributed the file writes to:
 
-ntoskrnl.exe
-PID 4
+```
+ntoskrnl.exe (PID 4)
+```
 
-This occurs when file operations are executed through Windows kernel APIs such as:
+This occurs when filesystem operations are executed through Windows kernel APIs such as:
 
-CreateFile()
-WriteFile()
-MoveFile()
+- `CreateFile()`
+- `WriteFile()`
+- `MoveFile()`
 
-In these cases the originating user process may not appear in telemetry.
+In these situations, the originating user process may not appear in telemetry.
 
-## Identifying Non-Kernel Processes
+---
+
+# Identifying Non-Kernel Processes
 
 To locate potential parent processes, a correlation search was performed.
 
-Query – File Touch Correlation
+## Query – File Touch Correlation
+
+```
 let t0 = datetime(2026-03-02 08:48:08);
 
 DeviceFileEvents
 | where Timestamp between (t0 - 30s .. t0 + 30s)
 | summarize count() by InitiatingProcessFileName
 | order by count_ desc
-Result
-Process	File Touches
-ntoskrnl.exe	253
-setup.exe	1
-gc_worker.exe	1
+```
 
-## Process Investigation
-setup.exe
+## Result
+
+| Process | File Touches |
+|------|------|
+| ntoskrnl.exe | 253 |
+| setup.exe | 1 |
+| gc_worker.exe | 1 |
+
+---
+
+# Process Investigation
+
+## setup.exe
 
 Path:
 
+```
 C:\Program Files (x86)\Microsoft\EdgeWebView\Application\...\Installer\setup.exe
+```
 
-Command line:
+Command Line:
 
+```
 --msedgewebview --delete-old-versions --system-level
+```
 
-Parent process:
+Parent Process:
 
+```
 runonce.exe
-Conclusion
+```
 
-This was confirmed to be a legitimate Microsoft Edge WebView update process.
+### Conclusion
 
-Additionally, the process executed 9 minutes after the ransomware activity, eliminating it as a possible origin.
+This was confirmed to be a legitimate **Microsoft Edge WebView update process**.
 
-gc_worker.exe
+Additionally, the process executed **9 minutes after the ransomware event**, eliminating it as a possible origin.
+
+---
+
+## gc_worker.exe
 
 This process belongs to the Chromium / Edge runtime environment.
 
 These worker processes do not perform recursive filesystem enumeration.
 
-Conclusion
+### Conclusion
 
 The process was incidental and unrelated to the event.
 
-## Script Activity
+---
 
-Shortly after the ransom note deployment, PowerShell executed a script:
+# Script Activity
 
+Shortly after ransom-note deployment, PowerShell executed a script:
+
+```
 C:\Users\vm-final-lab-wo\Desktop\cypher-toggle.ps1
+```
 
 Execution time:
 
+```
 08:48:41
+```
 
 An additional artifact was observed:
 
+```
 __PSScriptPolicyTest_*.ps1
+```
 
-These temporary scripts are created when PowerShell verifies execution policy before running a script.
+These files are temporary scripts created by PowerShell when validating execution policy before running a script.
 
-Significance
+### Significance
 
-Although the script executed after the ransom-note deployment, it remains notable because:
+Although the script executed **after the ransom-note deployment**, it remains notable because:
 
-it resides on a user desktop
+- it resides on a user desktop  
+- the name references encryption (`cypher`)  
+- it executed immediately after the event  
 
-the name references encryption (cypher)
+Without filesystem access, the script contents could not be validated.
 
-it executed immediately after the event
+---
 
-Without access to the endpoint filesystem, the contents of the script could not be verified.
-
-## Ransom Note Artifact
+# Ransom Note Artifact
 
 All notes were named:
 
+```
 !want_to_cry.txt
+```
 
-This name is an obvious reference to the WannaCry ransomware family.
+The name appears to reference the **WannaCry ransomware family**.
 
-However, real-world ransomware typically uses names such as:
+However, real ransomware typically uses names such as:
 
+```
 README.txt
 RECOVER_FILES.txt
 HOW_TO_DECRYPT.txt
+```
 
-The humorous naming pattern suggests the possibility of:
+### Interpretation
 
-security testing
-cyber-range simulation
-proof-of-concept tooling
+The naming pattern suggests the possibility of:
 
-## Encryption Analysis
+- security testing  
+- cyber-range simulation  
+- proof-of-concept tooling  
+
+---
+
+# Encryption Analysis
 
 A critical step was determining whether file encryption occurred.
 
-Query – File Renames
+## Query – File Renames
+
+```
 DeviceFileEvents
 | where ActionType == "FileRenamed"
 | where Timestamp between (datetime(2026-03-02 08:47:30) .. datetime(2026-03-02 08:50:00))
 | project Timestamp, PreviousFileName, FileName
-Result
+```
 
-Only 33 rename operations were observed.
+## Result
 
-Typical ransomware encryption would produce:
+Only **33 rename operations** were observed.
 
-thousands of renames
-mass extension changes
+Typical ransomware encryption generates:
+
+- thousands of renames
+- widespread file extension changes
 
 Examples:
 
+```
 file.docx → file.docx.locked
 image.jpg → image.jpg.encrypted
-Conclusion
+```
 
-No evidence of encryption activity was identified.
+### Conclusion
 
-## Network Activity
+No evidence of large-scale encryption activity was observed.
 
-Network telemetry was reviewed for evidence of command-and-control communication.
+---
 
-Query
+# Network Activity
+
+Network telemetry was reviewed for command-and-control communication.
+
+## Query
+
+```
 DeviceNetworkEvents
 | where Timestamp between (datetime(2026-03-02 08:45:00) .. datetime(2026-03-02 09:00:00))
-Result
-No suspicious network connections detected
+```
 
-No signs of:
+### Result
 
-payload downloads
-C2 communication
-data exfiltration
+No suspicious outbound connections were detected.
 
-## Authentication Review
+No evidence of:
 
-Logon activity during the investigation window was analyzed.
+- payload downloads  
+- command-and-control communication  
+- data exfiltration  
 
-Query
+---
+
+# Authentication Review
+
+Authentication activity during the investigation window was reviewed.
+
+## Query
+
+```
 DeviceLogonEvents
 | where Timestamp between (datetime(2026-03-02 08:40:00) .. datetime(2026-03-02 09:00:00))
-Result
+```
 
-No suspicious authentication events were detected.
+### Result
 
-Specifically, no evidence of:
+No suspicious authentication events were observed.
 
-RDP logons
-SMB lateral movement
-new account creation
+Specifically, there was no evidence of:
 
-## Key Findings
+- RDP logons  
+- SMB lateral movement  
+- new account creation  
+
+---
+
+# Key Findings
 
 Confirmed:
 
-Rapid ransom-note deployment across filesystem
-Automated directory enumeration
-Defender behavioral detection triggered
+- Rapid ransom-note deployment across filesystem  
+- Automated directory enumeration  
+- Defender behavioral detection triggered  
 
 Not observed:
 
-File encryption
-Command-and-control traffic
-Privilege escalation
-Lateral movement
-Persistence mechanisms
+- File encryption  
+- Command-and-control traffic  
+- Privilege escalation  
+- Lateral movement  
+- Persistence mechanisms  
 
-## Conclusion
+---
+
+# Conclusion
 
 The investigation confirmed that ransom-note style files were deployed across the system, triggering Defender's ransomware behavioral detection.
 
 However:
 
-No encryption behavior was observed
-No attacker infrastructure communication occurred
-No evidence of compromise was identified
+- No encryption activity was observed  
+- No attacker infrastructure communication occurred  
+- No evidence of system compromise was identified  
 
 The activity most closely resembles:
 
-ransomware simulation
-security testing
-proof-of-concept script
+- ransomware simulation  
+- security testing  
+- proof-of-concept scripting  
 
-Defender likely detected the behavior before encryption could begin, or the activity was intentionally generated within the cyber-range environment.
+Defender likely detected the behavior **before encryption began**, or the activity was intentionally generated within the cyber-range environment.
 
-## MITRE ATT&CK Mapping
-Technique	Description
-T1486	Data Encrypted for Impact (behavioral precursor)
-T1083	File and Directory Discovery
-T1106	Native API
-T1059.001	PowerShell
+---
 
-## Lessons Learned
+# MITRE ATT&CK Mapping
 
-This investigation highlights several important threat hunting principles:
+| Technique | Description |
+|------|------|
+| T1486 | Data Encrypted for Impact (behavioral precursor) |
+| T1083 | File and Directory Discovery |
+| T1106 | Native API |
+| T1059.001 | PowerShell |
+
+---
+
+# Lessons Learned
 
 ## Kernel Attribution Pitfall
 
 Defender may attribute file writes to:
 
+```
 ntoskrnl.exe
+```
 
 when the originating process uses kernel filesystem APIs.
 
+---
+
 ## Behavioral Detection Value
 
-Defender detected the activity before encryption began, demonstrating the value of behavior-based detections.
+Defender detected suspicious activity **before encryption began**, demonstrating the value of behavior-based ransomware detection.
+
+---
 
 ## Importance of Context
 
 In cyber-range environments, artifacts that resemble real attacks may originate from:
 
-training exercises
-simulation tools
-security testing scripts
-Future Improvements
+- training exercises  
+- simulation tools  
+- security testing scripts  
 
-## Recommended follow-up actions:
+---
 
-Retrieve and analyze cypher-toggle.ps1
+# Future Improvements
 
-Verify Defender remediation actions taken
+Recommended follow-up actions:
 
-Search environment for additional ransom-note artifacts
+- Retrieve and analyze `cypher-toggle.ps1`
+- Verify Defender remediation actions
+- Search the environment for additional ransom-note artifacts
+- Implement alerts for rapid mass file creation
 
-Implement automated alerts for mass directory file creation
+---
 
-## Final Assessment
-Impact: Low
-Encryption: Not observed
-Containment: Defender behavioral detection
+# Final Assessment
 
-The system does not appear to have experienced actual ransomware encryption, though the behavior closely mimicked early ransomware activity.
+| Metric | Result |
+|------|------|
+| Impact | Low |
+| Encryption | Not Observed |
+| Containment | Defender Behavioral Detection |
+
+The system does not appear to have experienced actual ransomware encryption, though the behavior closely mimicked early-stage ransomware activity.
