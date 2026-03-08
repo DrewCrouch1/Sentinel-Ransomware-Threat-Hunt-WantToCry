@@ -1,5 +1,9 @@
 # Sentinel-Ransomware-Threat-Hunt--Want_To_Cry
 
+Platform: Microsoft Sentinel + Microsoft Defender
+Environment: Azure VM Lab
+Focus: Ransomware Detection & Threat Hunting
+
 ## Overview
 Defender Alert ID:
 da2bdae3aa-7164-46ac-825d-52fcdd278972_1 & daa9f04e81-d68b-4275-a4c7-3cfb1e3d49d8_1
