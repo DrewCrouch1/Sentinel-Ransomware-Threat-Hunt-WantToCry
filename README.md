@@ -1,4 +1,4 @@
-# Sentinel-Ransomware-Threat-Hunt
+# Sentinel-Ransomware-Threat-Hunt--Want_To_Cry
 
 ## Overview
 Defender Alert ID:
